@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import express from 'express';
 import pkg from 'pg';
 import fs from 'fs';
@@ -15,49 +14,37 @@ app.use((req, res, next) => {
   next();
 });
 
-// =============================================================
-// 1. BASE DE DATOS POSTGRESQL (solo para guardar PEDIDOS)
-// =============================================================
+// --- BASE DE DATOS POSTGRESQL ---
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || '',
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  connectionString: process.env.DATABASE_URL || 'postgres://usuario:contraseña@localhost:5432/dietetica',
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-const initDB = async () => {
-  if (!process.env.DATABASE_URL) {
-    console.log('⚠️  DATABASE_URL no configurada. Los pedidos no se guardarán en la base de datos.');
-    return;
-  }
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS orders (
-        id SERIAL PRIMARY KEY,
-        order_number TEXT UNIQUE,
-        total REAL,
-        status TEXT DEFAULT 'Pendiente',
-        items JSON,
-        customer_info JSON,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    console.log('✅ Base de datos PostgreSQL lista.');
-  } catch (error) {
-    console.log('⚠️  No se pudo conectar a PostgreSQL:', (error as Error).message);
-  }
+// --- FUNCIÓN MÁGICA DE IMÁGENES ---
+const getCategoryImage = (category: string) => {
+  const cat = category.toLowerCase();
+  if (cat.includes('aceite') || cat.includes('vinagre') || cat.includes('salsa')) return 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('avena') || cat.includes('cereal') || cat.includes('granola')) return 'https://images.unsplash.com/photo-1517673132405-a56a62b18caf?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('bebida') || cat.includes('jugo')) return 'https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('fruta') && cat.includes('deshidratada')) return 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('fruto') && cat.includes('seco')) return 'https://images.unsplash.com/photo-1599598425947-330026216d05?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('miel') || cat.includes('endulzante')) return 'https://images.unsplash.com/photo-1587049352847-4d4b12405451?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('especia') || cat.includes('sal')) return 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('legumbre') || cat.includes('semilla')) return 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('galletita') || cat.includes('snack')) return 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('infusion') || cat.includes('te') || cat.includes('cafe')) return 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('cosmetica')) return 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('harina') || cat.includes('fecula') || cat.includes('premezcla')) return 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('pasta') || cat.includes('fideo')) return 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('chocolate') || cat.includes('golosina') || cat.includes('dulce')) return 'https://images.unsplash.com/photo-1548907040-4baa42d10919?auto=format&fit=crop&q=80&w=800';
+  if (cat.includes('complemento') || cat.includes('suplemento')) return 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=800';
+  
+  // Imagen por defecto si no coincide con nada
+  return 'https://images.unsplash.com/photo-1505253758473-96b7015fcd40?auto=format&fit=crop&q=80&w=800'; 
 };
-initDB();
 
-// =============================================================
-// 2. LECTOR DE LISTA DE PRECIOS (CSV local o Google Sheets)
-// =============================================================
-// Configurá SHEET_URL en .env:
-//   - URL de Google Sheets publicada como CSV
-//   - O ruta al archivo CSV local (por defecto: el archivo incluido en el proyecto)
-const SHEET_URL = process.env.SHEET_URL || 'lista_de_precios_dietetica__-_Hoja_1.csv';
-
-// Costo de envío y umbral de envío gratuito (en pesos)
-export const SHIPPING_COST = 2500;
-export const FREE_SHIPPING_THRESHOLD = 20000;
+// --- LECTOR OPTIMIZADO DE CSV ---
+const GOOGLE_SHEETS_CSV_URL = process.env.SHEET_URL || 'productos_optimizados.csv';
 
 let cachedProducts: any[] = [];
 let lastFetchTime = 0;
@@ -65,227 +52,85 @@ let lastFetchTime = 0;
 async function getProducts() {
   const CACHE_MINUTES = 5;
   const now = Date.now();
-
-  if (cachedProducts.length > 0 && now - lastFetchTime < CACHE_MINUTES * 60 * 1000) {
+  
+  if (cachedProducts.length > 0 && (now - lastFetchTime) < CACHE_MINUTES * 60 * 1000) {
     return cachedProducts;
   }
 
   try {
     let csvText = '';
-
-    if (SHEET_URL.startsWith('http')) {
-      const response = await fetch(SHEET_URL);
-      if (!response.ok) throw new Error(`No se pudo descargar el CSV: HTTP ${response.status}`);
+    if (GOOGLE_SHEETS_CSV_URL.startsWith('http')) {
+      const response = await fetch(GOOGLE_SHEETS_CSV_URL);
+      if (!response.ok) throw new Error('No se pudo descargar el CSV');
       csvText = await response.text();
     } else {
-      if (!fs.existsSync(SHEET_URL)) {
-        throw new Error(`Archivo CSV no encontrado: "${SHEET_URL}". Revisá la variable SHEET_URL en .env`);
-      }
-      csvText = fs.readFileSync(SHEET_URL, 'utf-8');
+      csvText = fs.readFileSync(GOOGLE_SHEETS_CSV_URL, 'utf-8');
     }
 
     const lines = csvText.split(/\r?\n/);
-    const products: any[] = [];
-    const seenIds = new Map<string, number>(); // para evitar IDs duplicados
-    let currentCategory = 'General';
+    const products = [];
 
-    for (const line of lines) {
-      // Separar columnas respetando comas dentro de comillas
-      const cols = line
-        .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
-        .map((col) => col.replace(/^"|"$/g, '').trim());
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
 
-      if (cols.length < 3) continue;
+      const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(col => col.replace(/^"|"$/g, '').trim());
+      
+      if (cols.length >= 7) {
+        const id = cols[0];
+        const name = cols[1];
+        const description = cols[2];
+        const price = parseFloat(cols[3]);
+        const inStock = cols[5].toLowerCase() === 'si';
+        const category = cols[6] || 'General';
+        const chars = cols[7] ? cols[7].split(',').map(c => c.trim()).filter(c => c) : [];
+        
+        // Asigna la foto dinámica según la categoría (Si el Excel trajera un link en cols[4] usaría ese)
+        const imageUrl = cols[4] || getCategoryImage(category);
 
-      const col0 = cols[0];
-      const col1 = cols[1];
-      const col2 = cols[2];
-
-      // Ignorar filas con errores de fórmula de Excel
-      if (col2 === '#REF!' || col2 === '#VALUE!' || col2 === '#N/A') continue;
-
-      // Detectar título de categoría (ej: "1 - ACEITES, VINAGRES Y SALSAS")
-      if (col0 && /^\d+\s*-/.test(col0)) {
-        currentCategory = col0.replace(/^\d+\s*-\s*/, '').trim();
-        continue;
-      }
-
-      // Detectar producto con precio
-      if (col1 && col2 && col2.startsWith('$')) {
-        const priceStr = col2
-          .replace('$', '')
-          .replace(/\./g, '')
-          .replace(',', '.')
-          .trim();
-        const price = parseFloat(priceStr);
-
-        if (!isNaN(price) && price > 0) {
-          // Generar ID base limpio
-          const baseId = col1
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^a-z0-9]/g, '-')
-            .replace(/-+/g, '-')
-            .replace(/^-|-$/g, '');
-
-          // Garantizar IDs únicos agregando un sufijo numérico si es necesario
-          const count = seenIds.get(baseId) ?? 0;
-          seenIds.set(baseId, count + 1);
-          const uniqueId = count === 0 ? baseId : `${baseId}-${count}`;
-
-          products.push({
-            id: uniqueId,
-            name: col1,
-            description: '',
-            price,
-            imageUrl: 'https://images.unsplash.com/photo-1505253758473-96b7015fcd40?q=80&w=800',
-            inStock: true,
-            characteristics: [],
-            category: currentCategory,
-          });
+        if (id && name && !isNaN(price)) {
+          products.push({ id, name, description, price, imageUrl, inStock, characteristics: chars, category });
         }
       }
     }
-
+    
     cachedProducts = products;
     lastFetchTime = now;
-    console.log(`✅ ${products.length} productos cargados desde el CSV.`);
     return products;
   } catch (error) {
-    console.error('❌ Error leyendo los productos:', (error as Error).message);
-    return cachedProducts; // devuelve el caché anterior si falla
+    return cachedProducts;
   }
 }
 
-// =============================================================
-// 3. RUTAS DE LA API
-// =============================================================
-
-// GET /api/products — Devuelve todos los productos del CSV
-app.get('/api/products', async (_req, res) => {
+// --- RUTAS API ---
+app.get('/api/products', async (req, res) => {
   const products = await getProducts();
   res.json(products);
 });
 
-// GET /api/config — Devuelve configuración útil para el frontend
-app.get('/api/config', (_req, res) => {
-  res.json({
-    shippingCost: SHIPPING_COST,
-    freeShippingThreshold: FREE_SHIPPING_THRESHOLD,
-  });
-});
-
-// POST /api/orders — Crea un nuevo pedido
 app.post('/api/orders', async (req, res) => {
   try {
     const { items, customerInfo, deliveryMethod, paymentMethod } = req.body;
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, error: 'El pedido no tiene productos.' });
-    }
-
-    const allProducts = await getProducts();
     let subtotal = 0;
-
-    // Recalcular total con precios reales del CSV (seguridad: evita manipulación del frontend)
+    const allProducts = await getProducts();
     for (const item of items) {
-      const realProduct = allProducts.find((p) => p.id === item.product.id);
-      if (!realProduct) continue;
-      subtotal += realProduct.price * item.quantity;
+      const realProduct = allProducts.find(p => p.id === item.product.id);
+      if(realProduct) subtotal += realProduct.price * item.quantity;
     }
-
-    // Envío gratis si el pedido supera el umbral
-    const shippingCost =
-      deliveryMethod === 'delivery' && subtotal < FREE_SHIPPING_THRESHOLD
-        ? SHIPPING_COST
-        : 0;
-
-    const discount = paymentMethod === 'transfer' ? Math.round(subtotal * 0.1) : 0;
-    const finalTotal = subtotal + shippingCost - discount;
-
-    const orderNumber =
-      '#LF-' + Math.floor(Math.random() * 100000).toString().padStart(5, '0');
-
-    if (!process.env.DATABASE_URL) {
-      // Sin base de datos: devolvemos éxito igual (el pedido se coordina por WhatsApp)
-      console.log(`📦 Nuevo pedido ${orderNumber}: $${finalTotal} (sin DB configurada)`);
-      return res.json({ success: true, orderNumber });
-    }
-
-    await pool.query(
-      'INSERT INTO orders (order_number, total, items, customer_info) VALUES ($1, $2, $3, $4)',
-      [orderNumber, finalTotal, JSON.stringify(items), JSON.stringify(customerInfo)]
-    );
-
+    const finalTotal = subtotal + (deliveryMethod === 'delivery' ? 2500 : 0) - (paymentMethod === 'transfer' ? Math.round(subtotal * 0.1) : 0);
+    const orderNumber = '#LF-' + Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+    await pool.query('INSERT INTO orders (order_number, total, items, customer_info) VALUES ($1, $2, $3, $4)', [orderNumber, finalTotal, JSON.stringify(items), JSON.stringify(customerInfo)]);
     res.json({ success: true, orderNumber });
-  } catch (error) {
-    console.error('❌ Error procesando pedido:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Hubo un error al guardar el pedido. Revisá la configuración de la base de datos.',
-    });
-  }
+  } catch (error) { res.status(500).json({ success: false }); }
 });
 
-// =============================================================
-// 4. RUTAS DEL ADMIN
-// =============================================================
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'lafamilia2024';
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'lf-token-seguro-789';
-
-if (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_TOKEN) {
-  console.warn('⚠️  ADMIN_PASSWORD y ADMIN_TOKEN no configurados en .env. Usando valores por defecto (inseguro).');
-}
-
-const requireAuth = (
-  req: express.Request,
-  res: express.Response,
-  next: express.NextFunction
-) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (token === ADMIN_TOKEN) next();
-  else res.status(401).json({ error: 'Acceso no autorizado' });
+const ADMIN_PASSWORD = 'lafamilia2024';
+const ADMIN_TOKEN = 'lf-token-seguro-789';
+const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (req.headers.authorization?.split(' ')[1] === ADMIN_TOKEN) next(); else res.status(401).json({ error: 'No autorizado' });
 };
+app.post('/api/admin/login', (req, res) => req.body.password === ADMIN_PASSWORD ? res.json({ success: true, token: ADMIN_TOKEN }) : res.status(401).json({ success: false }));
+app.get('/api/orders', requireAuth, async (req, res) => res.json((await pool.query('SELECT * FROM orders ORDER BY created_at DESC')).rows));
+app.patch('/api/orders/:id/status', requireAuth, async (req, res) => { await pool.query('UPDATE orders SET status = $1 WHERE id = $2', [req.body.status, req.params.id]); res.json({ success: true }); });
 
-app.post('/api/admin/login', (req, res) => {
-  if (req.body.password === ADMIN_PASSWORD) {
-    res.json({ success: true, token: ADMIN_TOKEN });
-  } else {
-    res.status(401).json({ success: false, error: 'Contraseña incorrecta' });
-  }
-});
-
-app.get('/api/orders', requireAuth, async (_req, res) => {
-  if (!process.env.DATABASE_URL) {
-    return res.status(503).json({ error: 'Base de datos no configurada. Completá DATABASE_URL en .env' });
-  }
-  try {
-    const { rows } = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: 'Error consultando la base de datos' });
-  }
-});
-
-app.patch('/api/orders/:id/status', requireAuth, async (req, res) => {
-  if (!process.env.DATABASE_URL) {
-    return res.status(503).json({ error: 'Base de datos no configurada' });
-  }
-  try {
-    await pool.query('UPDATE orders SET status = $1 WHERE id = $2', [
-      req.body.status,
-      req.params.id,
-    ]);
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: 'Error actualizando estado' });
-  }
-});
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`);
-  console.log(`   CSV: ${SHEET_URL}`);
-  console.log(`   DB:  ${process.env.DATABASE_URL ? '✅ Conectada' : '⚠️  No configurada (pedidos sin persistencia)'}`);
-});
+app.listen(process.env.PORT || 3001, () => console.log('Backend corriendo'));
