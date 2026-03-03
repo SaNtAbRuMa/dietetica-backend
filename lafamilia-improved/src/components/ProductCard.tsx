@@ -1,5 +1,5 @@
-import { useState, memo } from 'react';
-import { Plus, Info } from 'lucide-react';
+import { useState } from 'react';
+import { ShoppingCart } from 'lucide-react';
 import { Product } from '../types';
 import { formatPrice } from '../utils/format';
 import { getSizeLabel } from '../utils/sizeLabel';
@@ -10,102 +10,123 @@ interface ProductCardProps {
   onViewDetails: (product: Product) => void;
 }
 
-function ProductCardInner({ product, onAddToCart, onViewDetails }: ProductCardProps) {
-  // Si tiene variantes agrupadas, empezamos mostrando la más barata
-  const [selectedVariant, setSelectedVariant] = useState<Product>(
-    product.variants && product.variants.length > 0 ? product.variants[0] : product
-  );
-
+export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCardProps) {
   const hasVariants = product.variants && product.variants.length > 1;
 
+  const [selectedVariant, setSelectedVariant] = useState<Product>(
+    hasVariants ? product.variants![0] : product
+  );
+
+  const handleCardClick = () => {
+    onViewDetails(selectedVariant);
+  };
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden hover:shadow-md transition-shadow duration-300 flex flex-col h-full group">
-      <div className="relative aspect-square overflow-hidden bg-stone-100">
-        <img 
-          src={selectedVariant.imageUrl} 
+    <div className="bg-white rounded-2xl shadow-sm border border-stone-100 flex flex-col h-full group hover:shadow-lg transition-all duration-300">
+
+      {/* Imagen: toda el area es un boton que abre el modal */}
+      <button
+        onClick={handleCardClick}
+        className="relative w-full aspect-square overflow-hidden rounded-t-2xl bg-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+        aria-label={`Ver detalle de ${product.name}`}
+      >
+        <img
+          src={selectedVariant.imageUrl}
           alt={product.name}
           loading="lazy"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
+
         {!selectedVariant.inStock && (
-          <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
-            <span className="bg-stone-900 text-white px-4 py-1.5 rounded-full text-sm font-medium">Sin Stock</span>
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex items-center justify-center">
+            <span className="bg-stone-900 text-white px-4 py-1.5 rounded-full text-sm font-semibold">
+              Sin Stock
+            </span>
           </div>
         )}
-        <button 
-          onClick={() => onViewDetails(selectedVariant)}
-          className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full text-stone-600 hover:text-emerald-600 hover:bg-white transition-colors shadow-sm"
+
+        {/* Overlay hover que indica que se puede ver el detalle */}
+        <div className="absolute inset-0 bg-stone-900/0 group-hover:bg-stone-900/20 transition-colors duration-300 flex items-center justify-center">
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/95 text-stone-800 text-xs font-bold px-3 py-1.5 rounded-full shadow-md">
+            Ver detalle
+          </span>
+        </div>
+      </button>
+
+      <div className="p-4 flex flex-col flex-grow">
+
+        <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md w-fit mb-2">
+          {product.category}
+        </span>
+
+        {/* Nombre clickeable */}
+        <button
+          onClick={handleCardClick}
+          className="text-left font-serif text-base font-bold text-stone-900 leading-snug line-clamp-2 hover:text-emerald-700 transition-colors mb-2"
         >
-          <Info className="w-5 h-5" />
-        </button>
-      </div>
-
-      <div className="p-5 flex flex-col flex-grow">
-        <div className="mb-1">
-          <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">{product.category}</span>
-        </div>
-        
-        {/* Usamos el nombre base agrupado (ej: Aceite De Coco Gb Neutro) */}
-        <h3 className="font-serif text-lg font-bold text-stone-900 mb-1 leading-tight line-clamp-2">
           {product.name}
-        </h3>
-        
-        <div className="flex flex-wrap gap-1 mb-3">
-          {product.characteristics?.slice(0, 2).map((char, idx) => (
-            <span key={idx} className="text-[10px] uppercase tracking-wider font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-sm">
-              {char}
-            </span>
-          ))}
-        </div>
+        </button>
 
-        <div className="mt-auto pt-4 flex flex-col gap-3 border-t border-stone-100">
-          
-          {/* LA LISTA DESPLEGABLE DE TAMAÑOS */}
-          {hasVariants ? (
-            <select 
-              className="w-full text-sm font-medium border border-stone-200 rounded-lg p-2 focus:outline-none focus:border-emerald-500 bg-stone-50 text-stone-700 cursor-pointer"
-              value={selectedVariant.id}
-              onChange={(e) => {
-                const variant = product.variants!.find(v => v.id === e.target.value);
-                if (variant) setSelectedVariant(variant);
-              }}
-            >
-              {product.variants!.map(v => (
-                <option key={v.id} value={v.id}>
-                  {getSizeLabel(v.name)} - ${v.price.toLocaleString('es-AR')}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <div className="h-[38px]"></div> // Espaciador invisible para que las tarjetas no queden chuecas
-          )}
-
-          <div className="flex items-center justify-between mt-1">
-            <div className="flex flex-col">
-              {hasVariants && <span className="text-[10px] text-stone-400 font-medium">Seleccionado:</span>}
-              <span className="text-xl font-bold text-stone-900">
-                ${selectedVariant.price.toLocaleString('es-AR')}
+        {product.characteristics && product.characteristics.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {product.characteristics.slice(0, 2).map((char, idx) => (
+              <span
+                key={idx}
+                className="text-[10px] uppercase tracking-wide font-semibold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-sm"
+              >
+                {char}
               </span>
-            </div>
-            
-            <button 
-              onClick={() => onAddToCart(selectedVariant)}
-              disabled={!selectedVariant.inStock}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-medium transition-all active:scale-95 ${
-                selectedVariant.inStock 
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm' 
-                  : 'bg-stone-100 text-stone-400 cursor-not-allowed'
-              }`}
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Agregar</span>
-            </button>
+            ))}
           </div>
+        )}
+
+        {/* Selector de variantes como chips — reemplaza el <select> nativo */}
+        {hasVariants && (
+          <div className="mb-3">
+            <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide mb-1.5">
+              Tamaño / Presentación
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {product.variants!.map(v => {
+                const isSelected = v.id === selectedVariant.id;
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => setSelectedVariant(v)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                      isSelected
+                        ? 'bg-stone-900 text-white border-stone-900 shadow-sm'
+                        : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400 hover:bg-stone-50'
+                    }`}
+                  >
+                    {getSizeLabel(v.name)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Precio + botón */}
+        <div className="mt-auto pt-3 border-t border-stone-100 flex items-center justify-between gap-2">
+          <span className="text-xl font-bold text-stone-900">
+            {formatPrice(selectedVariant.price)}
+          </span>
+
+          <button
+            onClick={() => onAddToCart(selectedVariant)}
+            disabled={!selectedVariant.inStock}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold text-sm transition-all active:scale-95 ${
+              selectedVariant.inStock
+                ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm hover:shadow-md'
+                : 'bg-stone-100 text-stone-400 cursor-not-allowed'
+            }`}
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>Agregar</span>
+          </button>
         </div>
       </div>
     </div>
   );
 }
-
-// memo evita re-renders cuando el producto no cambió (importante con catálogos grandes)
-export const ProductCard = memo(ProductCardInner);

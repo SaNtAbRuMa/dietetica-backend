@@ -11,8 +11,11 @@ import { Checkout } from './components/Checkout';
 import { OrderSuccess } from './components/OrderSuccess';
 import { WhatsAppButton } from './components/WhatsAppButton';
 import { RenderWakeupBanner } from './components/RenderWakeupBanner';
+import { Footer } from './components/Footer';
 import { Product, CartItem } from './types';
 import { API_BASE } from './config';
+import { ShoppingBag } from 'lucide-react';
+import { formatPrice } from './utils/format';
 
 // Persistencia del carrito en localStorage
 const CART_STORAGE_KEY = 'lf-cart';
@@ -102,7 +105,10 @@ export default function App() {
   }, [fetchProducts]);
 
   const categories = useMemo(
-    () => Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort(),
+    () => Array.from(new Set(products.map(p => p.category)))
+      .filter(Boolean)
+      .sort()
+      .map(cat => cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()),
     [products]
   );
 
@@ -127,7 +133,7 @@ export default function App() {
 
   const isFiltering = !!searchQuery || !!selectedCategory;
 
-  const handleAddToCart = (product: Product) => {
+  const handleAddToCart = useCallback((product: Product) => {
     setCartItems(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing)
@@ -138,7 +144,7 @@ export default function App() {
     });
     setToast({ message: `${product.name} agregado`, id: Date.now() });
     setTimeout(() => setToast(null), 3000);
-  };
+  }, []);
 
   const handleUpdateQuantity = (productId: string, delta: number) =>
     setCartItems(prev =>
@@ -209,62 +215,49 @@ export default function App() {
                       Nuestros Productos
                     </h2>
 
-                    {!isLoading && !loadError && (
-                      <div className="flex flex-col lg:flex-row gap-4 justify-between items-center bg-white p-3 rounded-2xl shadow-sm border border-stone-100">
-                        {/* Chips de categorías */}
-                        <div
-                          className="flex overflow-x-auto gap-2 w-full lg:w-auto pb-2 lg:pb-0 [&::-webkit-scrollbar]:hidden"
-                          style={{ scrollbarWidth: 'none' }}
-                        >
-                          <button
-                            onClick={() => handleCategorySelect(null)}
-                            className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                              !selectedCategory
-                                ? 'bg-stone-900 text-white'
-                                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                            }`}
-                          >
-                            Todas
-                          </button>
-                          {categories.map(cat => (
+                  {!isLoading && !loadError && (
+                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-stone-100">
+                      {/* Info de filtros activos */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {selectedCategory && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">
+                            {selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1).toLowerCase()}
                             <button
-                              key={cat}
-                              onClick={() => handleCategorySelect(cat)}
-                              className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                                selectedCategory === cat
-                                  ? 'bg-stone-900 text-white'
-                                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                              }`}
+                              onClick={() => handleCategorySelect(null)}
+                              className="hover:bg-emerald-200 rounded-full p-0.5"
+                              aria-label="Quitar filtro"
                             >
-                              {cat}
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
                             </button>
-                          ))}
-                        </div>
-
-                        {/* Ordenamiento */}
-                        <div className="w-full lg:w-auto flex-shrink-0">
-                          <select
-                            value={sortBy}
-                            onChange={e => setSortBy(e.target.value as any)}
-                            className="w-full lg:w-auto px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                          >
-                            <option value="name_asc">Orden: A - Z</option>
-                            <option value="name_desc">Orden: Z - A</option>
-                            <option value="price_asc">Precio: Menor a Mayor</option>
-                            <option value="price_desc">Precio: Mayor a Menor</option>
-                          </select>
-                        </div>
+                          </span>
+                        )}
+                        {isFiltering && (
+                          <span className="text-xs text-stone-400">
+                            {filteredAndSortedProducts.length} de {products.length} productos
+                          </span>
+                        )}
+                        {!isFiltering && (
+                          <span className="text-xs text-stone-400">
+                            {products.length} productos en total
+                          </span>
+                        )}
                       </div>
-                    )}
 
-                    {/* Contador de resultados cuando hay filtros activos */}
-                    {!isLoading && !loadError && isFiltering && (
-                      <p className="text-sm text-stone-500 mt-3 text-center">
-                        {filteredAndSortedProducts.length === 0
-                          ? 'Sin resultados'
-                          : `Mostrando ${filteredAndSortedProducts.length} de ${products.length} productos`}
-                      </p>
-                    )}
+                      {/* Ordenamiento */}
+                      <select
+                        value={sortBy}
+                        onChange={e => setSortBy(e.target.value as any)}
+                        className="w-full sm:w-auto px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shrink-0"
+                      >
+                        <option value="name_asc">Orden: A - Z</option>
+                        <option value="name_desc">Orden: Z - A</option>
+                        <option value="price_asc">Precio: Menor a Mayor</option>
+                        <option value="price_desc">Precio: Mayor a Menor</option>
+                      </select>
+                    </div>
+                  )}
                   </div>
 
                   {/* Skeleton loader mientras carga */}
@@ -350,32 +343,55 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      {/* Toast de confirmación (pointer-events-none para no bloquear clicks) */}
+      {/* Toast — posicionado más arriba para no tapar el botón de WhatsApp */}
       <AnimatePresence>
         {toast && (
           <motion.div
+            key={toast.id}
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-stone-700 pointer-events-none"
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-white px-5 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-stone-700 pointer-events-none"
           >
-            <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0">
-              ✓
-            </div>
-            <p className="font-medium text-sm whitespace-nowrap">{toast.message}</p>
+            <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-[10px] shrink-0">✓</div>
+            <p className="font-medium text-sm whitespace-nowrap max-w-[200px] truncate">{toast.message}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Barra flotante de carrito en mobile — aparece solo cuando hay ítems y estamos en la tienda */}
+      <AnimatePresence>
+        {cartItemCount > 0 && currentView === 'store' && !isCartOpen && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="sm:hidden fixed bottom-5 left-4 right-4 z-40"
+          >
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="w-full bg-stone-900 text-white rounded-2xl px-5 py-4 flex items-center justify-between shadow-2xl border border-stone-700"
+            >
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <ShoppingBag className="w-5 h-5" />
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-emerald-500 rounded-full text-[10px] font-bold flex items-center justify-center">
+                    {cartItemCount}
+                  </span>
+                </div>
+                <span className="font-semibold text-sm">Ver carrito</span>
+              </div>
+              <span className="font-bold text-emerald-400">
+                {formatPrice(cartItems.reduce((s, i) => s + i.product.price * i.quantity, 0))}
+              </span>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
       {currentView !== 'admin' && (
-        <footer className="bg-stone-900 text-stone-400 py-10 text-center">
-          <p
-            className="text-xs cursor-pointer hover:text-stone-300 transition-colors"
-            onDoubleClick={() => navigateTo('admin')}
-          >
-            © {new Date().getFullYear()} La Familia Dietética. Doble clic aquí para Administrar.
-          </p>
-        </footer>
+        <Footer onAdminAccess={() => navigateTo('admin')} />
       )}
 
       <Cart
