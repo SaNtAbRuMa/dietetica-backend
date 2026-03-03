@@ -19,16 +19,12 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-// --- HELPER 1: EMBELLECEDOR DE TEXTOS (Primera Letra Mayúscula) ---
 const capitalizeText = (text: string) => {
   if (!text) return '';
-  return text.toLowerCase().split(' ')
-    .filter(word => word.length > 0)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  return text.toLowerCase().split(' ').filter(word => word.length > 0)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
 
-// --- HELPER 2: IMÁGENES AUTOMÁTICAS ---
 const getCategoryImage = (category: string) => {
   const cat = category.toLowerCase();
   if (cat.includes('aceite') || cat.includes('vinagre') || cat.includes('salsa')) return 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=800';
@@ -49,7 +45,6 @@ const getCategoryImage = (category: string) => {
   return 'https://images.unsplash.com/photo-1505253758473-96b7015fcd40?auto=format&fit=crop&q=80&w=800'; 
 };
 
-// --- HELPER 3: CARACTERÍSTICAS AUTOMÁTICAS ---
 const getAutoCharacteristics = (category: string) => {
   const cat = category.toLowerCase();
   if (cat.includes('tacc') || cat.includes('celiaco')) return ['Sin TACC', 'Apto Celíacos'];
@@ -59,7 +54,6 @@ const getAutoCharacteristics = (category: string) => {
   return ['Calidad Premium', 'Dietética Natural'];
 };
 
-// --- LECTOR OPTIMIZADO DE CSV ---
 const GOOGLE_SHEETS_CSV_URL = process.env.SHEET_URL || 'productos_optimizados.csv';
 
 let cachedProducts: any[] = [];
@@ -68,10 +62,7 @@ let lastFetchTime = 0;
 async function getProducts() {
   const CACHE_MINUTES = 5;
   const now = Date.now();
-  
-  if (cachedProducts.length > 0 && (now - lastFetchTime) < CACHE_MINUTES * 60 * 1000) {
-    return cachedProducts;
-  }
+  if (cachedProducts.length > 0 && (now - lastFetchTime) < CACHE_MINUTES * 60 * 1000) return cachedProducts;
 
   try {
     let csvText = '';
@@ -84,7 +75,7 @@ async function getProducts() {
     }
 
     const lines = csvText.split(/\r?\n/);
-    const products = [];
+    const parsedProducts = [];
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i];
@@ -94,40 +85,61 @@ async function getProducts() {
       
       if (cols.length >= 7) {
         const id = cols[0];
-        // 1. Convertimos nombres y categorías a Mayúsculas
         const name = capitalizeText(cols[1]); 
         const description = capitalizeText(cols[2] || '');
         const price = parseFloat(cols[3]);
         const inStock = cols[5] ? cols[5].toLowerCase() === 'si' : true;
         const category = capitalizeText(cols[6] || 'General'); 
         
-        // 2. Características automáticas si el Excel está vacío
         let chars = cols[7] ? cols[7].split(',').map(c => capitalizeText(c.trim())).filter(c => c) : [];
-        if (chars.length === 0) {
-          chars = getAutoCharacteristics(category);
-        }
+        if (chars.length === 0) chars = getAutoCharacteristics(category);
 
-        // 3. Imágenes
         let imageUrl = cols[4];
-        if (!imageUrl || imageUrl.includes('1505253758473')) {
-          imageUrl = getCategoryImage(category);
-        }
+        if (!imageUrl || imageUrl.includes('1505253758473')) imageUrl = getCategoryImage(category);
 
         if (id && name && !isNaN(price)) {
-          products.push({ id, name, description, price, imageUrl, inStock, characteristics: chars, category });
+          parsedProducts.push({ id, name, description, price, imageUrl, inStock, characteristics: chars, category });
         }
       }
     }
-    
-    cachedProducts = products;
+
+    // --- MAGIA: AGRUPACIÓN POR TAMAÑOS ---
+    const groupedMap = new Map();
+    // Expresión para encontrar ml, gr, kg, etc.
+    const sizeRegex = /\b(\d+(?:[.,]\d+)?\s*(?:ml|cc|l|g|gr|kg|cm3|oz))\b/i;
+
+    parsedProducts.forEach(p => {
+      const sizeMatch = p.name.match(sizeRegex);
+      
+      if (sizeMatch) {
+        // Le sacamos el tamaño al nombre base (ej: queda "Aceite De Coco Gb Neutro")
+        const baseName = p.name.replace(sizeRegex, '').replace(/\s{2,}/g, ' ').trim();
+        const key = `${baseName}-${p.category}`;
+        
+        if (!groupedMap.has(key)) {
+          // Es el primero, creamos el grupo
+          groupedMap.set(key, { ...p, name: baseName, variants: [p] });
+        } else {
+          // Ya existe, lo agregamos como variante
+          const group = groupedMap.get(key);
+          group.variants.push(p);
+          group.variants.sort((a: any, b: any) => a.price - b.price); // Ordenar de más barato a caro
+          group.price = group.variants[0].price; // Mostrar el precio base
+        }
+      } else {
+        // No tiene tamaño especificado, no se agrupa
+        groupedMap.set(p.id, p);
+      }
+    });
+
+    cachedProducts = Array.from(groupedMap.values());
     lastFetchTime = now;
-    return products;
+    return cachedProducts;
   } catch (error) {
     return cachedProducts;
   }
 }
 
-// --- RUTAS API ---
 app.get('/api/products', async (req, res) => {
   const products = await getProducts();
   res.json(products);
@@ -139,7 +151,16 @@ app.post('/api/orders', async (req, res) => {
     let subtotal = 0;
     const allProducts = await getProducts();
     for (const item of items) {
-      const realProduct = allProducts.find(p => p.id === item.product.id);
+      // Al comprar, buscamos la variante específica elegida
+      let realProduct = null;
+      for (const group of allProducts) {
+        if (group.variants) {
+          const foundVariant = group.variants.find((v: any) => v.id === item.product.id);
+          if (foundVariant) realProduct = foundVariant;
+        } else if (group.id === item.product.id) {
+          realProduct = group;
+        }
+      }
       if(realProduct) subtotal += realProduct.price * item.quantity;
     }
     const finalTotal = subtotal + (deliveryMethod === 'delivery' ? 2500 : 0) - (paymentMethod === 'transfer' ? Math.round(subtotal * 0.1) : 0);
@@ -149,7 +170,6 @@ app.post('/api/orders', async (req, res) => {
   } catch (error) { res.status(500).json({ success: false }); }
 });
 
-// --- RUTAS DEL ADMIN ---
 const ADMIN_PASSWORD = 'lafamilia2024';
 const ADMIN_TOKEN = 'lf-token-seguro-789';
 const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
