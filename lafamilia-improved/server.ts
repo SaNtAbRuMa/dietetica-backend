@@ -14,13 +14,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// --- BASE DE DATOS POSTGRESQL ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://usuario:contraseña@localhost:5432/dietetica',
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-// --- FUNCIÓN MÁGICA DE IMÁGENES ---
+// --- HELPER 1: EMBELLECEDOR DE TEXTOS (Primera Letra Mayúscula) ---
+const capitalizeText = (text: string) => {
+  if (!text) return '';
+  return text.toLowerCase().split(' ')
+    .filter(word => word.length > 0)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+// --- HELPER 2: IMÁGENES AUTOMÁTICAS ---
 const getCategoryImage = (category: string) => {
   const cat = category.toLowerCase();
   if (cat.includes('aceite') || cat.includes('vinagre') || cat.includes('salsa')) return 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=800';
@@ -38,9 +46,17 @@ const getCategoryImage = (category: string) => {
   if (cat.includes('pasta') || cat.includes('fideo')) return 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&q=80&w=800';
   if (cat.includes('chocolate') || cat.includes('golosina') || cat.includes('dulce')) return 'https://images.unsplash.com/photo-1548907040-4baa42d10919?auto=format&fit=crop&q=80&w=800';
   if (cat.includes('complemento') || cat.includes('suplemento')) return 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=800';
-  
-  // Imagen por defecto si no coincide con nada
   return 'https://images.unsplash.com/photo-1505253758473-96b7015fcd40?auto=format&fit=crop&q=80&w=800'; 
+};
+
+// --- HELPER 3: CARACTERÍSTICAS AUTOMÁTICAS ---
+const getAutoCharacteristics = (category: string) => {
+  const cat = category.toLowerCase();
+  if (cat.includes('tacc') || cat.includes('celiaco')) return ['Sin TACC', 'Apto Celíacos'];
+  if (cat.includes('fruto') || cat.includes('seco')) return ['Rico en Energía', 'Fuente de Proteína'];
+  if (cat.includes('cosmetica')) return ['Cuidado Natural', 'Cruelty Free'];
+  if (cat.includes('vegan')) return ['100% Vegano', 'Plant Based'];
+  return ['Calidad Premium', 'Dietética Natural'];
 };
 
 // --- LECTOR OPTIMIZADO DE CSV ---
@@ -78,15 +94,24 @@ async function getProducts() {
       
       if (cols.length >= 7) {
         const id = cols[0];
-        const name = cols[1];
-        const description = cols[2];
+        // 1. Convertimos nombres y categorías a Mayúsculas
+        const name = capitalizeText(cols[1]); 
+        const description = capitalizeText(cols[2] || '');
         const price = parseFloat(cols[3]);
-        const inStock = cols[5].toLowerCase() === 'si';
-        const category = cols[6] || 'General';
-        const chars = cols[7] ? cols[7].split(',').map(c => c.trim()).filter(c => c) : [];
+        const inStock = cols[5] ? cols[5].toLowerCase() === 'si' : true;
+        const category = capitalizeText(cols[6] || 'General'); 
         
-        // Asigna la foto dinámica según la categoría (Si el Excel trajera un link en cols[4] usaría ese)
-        const imageUrl = cols[4] || getCategoryImage(category);
+        // 2. Características automáticas si el Excel está vacío
+        let chars = cols[7] ? cols[7].split(',').map(c => capitalizeText(c.trim())).filter(c => c) : [];
+        if (chars.length === 0) {
+          chars = getAutoCharacteristics(category);
+        }
+
+        // 3. Imágenes
+        let imageUrl = cols[4];
+        if (!imageUrl || imageUrl.includes('1505253758473')) {
+          imageUrl = getCategoryImage(category);
+        }
 
         if (id && name && !isNaN(price)) {
           products.push({ id, name, description, price, imageUrl, inStock, characteristics: chars, category });
@@ -124,6 +149,7 @@ app.post('/api/orders', async (req, res) => {
   } catch (error) { res.status(500).json({ success: false }); }
 });
 
+// --- RUTAS DEL ADMIN ---
 const ADMIN_PASSWORD = 'lafamilia2024';
 const ADMIN_TOKEN = 'lf-token-seguro-789';
 const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
