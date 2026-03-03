@@ -4,9 +4,10 @@ export interface Product {
   description: string;
   price: number;
   imageUrl: string;
+  category: string;
   inStock: boolean;
   characteristics: string[];
-  category: string;
+  variants?: Product[]; // <-- ESTA ES LA MAGIA NUEVA
 }
 
 export interface CartItem {

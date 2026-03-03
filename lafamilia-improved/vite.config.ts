@@ -8,9 +8,6 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -18,11 +15,9 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
-      // En desarrollo, redirige /api al servidor backend local.
-      // En producción, configurá VITE_API_URL en .env con la URL completa del backend.
       proxy: {
         '/api': {
-          target: 'http://localhost:3001',
+          target: env.VITE_API_URL || 'http://localhost:3001',
           changeOrigin: true,
         },
       },

@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { CartItem } from '../types';
-import { X, Trash2, Plus, Minus, ShoppingBag } from 'lucide-react';
+import { X, Trash2, Plus, Minus, ShoppingBag, Truck } from 'lucide-react';
 import { formatPrice } from '../utils/format';
+import { FREE_SHIPPING_THRESHOLD } from '../config';
 
 interface CartProps {
   isOpen: boolean;
@@ -13,6 +15,18 @@ interface CartProps {
 
 export function Cart({ isOpen, onClose, items, onUpdateQuantity, onRemoveItem, onCheckout }: CartProps) {
   const total = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const shippingProgress = Math.min((total / FREE_SHIPPING_THRESHOLD) * 100, 100);
+  const amountLeft = FREE_SHIPPING_THRESHOLD - total;
+  const qualifiesFreeShipping = total >= FREE_SHIPPING_THRESHOLD;
+
+  // Bug fix: cerrar carrito con tecla Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -116,12 +130,33 @@ export function Cart({ isOpen, onClose, items, onUpdateQuantity, onRemoveItem, o
           </div>
 
           {items.length > 0 && (
-            <div className="border-t border-stone-100 p-6 bg-stone-50">
-              <div className="flex justify-between items-center mb-1">
+            <div className="border-t border-stone-100 p-6 bg-stone-50 space-y-4">
+              {/* Barra de progreso de envío gratis */}
+              <div>
+                {qualifiesFreeShipping ? (
+                  <div className="flex items-center gap-2 text-emerald-600 text-xs font-semibold mb-2">
+                    <Truck className="w-4 h-4" />
+                    <span>🎉 ¡Tenés envío gratis!</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-stone-500 text-xs font-medium mb-2">
+                    <Truck className="w-4 h-4" />
+                    <span>Agregá <strong className="text-stone-700">{formatPrice(amountLeft)}</strong> más para envío gratis</span>
+                  </div>
+                )}
+                <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                    style={{ width: `${shippingProgress}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center">
                 <span className="text-stone-500 text-sm">Subtotal ({items.reduce((s, i) => s + i.quantity, 0)} ítems)</span>
                 <span className="text-base font-semibold text-stone-700">{formatPrice(total)}</span>
               </div>
-              <p className="text-xs text-stone-400 mb-4">Envío se calcula en el siguiente paso</p>
+              <p className="text-xs text-stone-400 -mt-2">Envío se calcula en el siguiente paso</p>
               <button 
                 className="w-full py-3 px-4 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-sm"
                 onClick={onCheckout}

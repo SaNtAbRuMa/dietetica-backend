@@ -1,7 +1,8 @@
+import { useState, memo } from 'react';
+import { Plus, Info } from 'lucide-react';
 import { Product } from '../types';
-import { ShoppingCart, Info } from 'lucide-react';
-import { motion } from 'motion/react';
 import { formatPrice } from '../utils/format';
+import { getSizeLabel } from '../utils/sizeLabel';
 
 interface ProductCardProps {
   product: Product;
@@ -9,74 +10,102 @@ interface ProductCardProps {
   onViewDetails: (product: Product) => void;
 }
 
-export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCardProps) {
+function ProductCardInner({ product, onAddToCart, onViewDetails }: ProductCardProps) {
+  // Si tiene variantes agrupadas, empezamos mostrando la más barata
+  const [selectedVariant, setSelectedVariant] = useState<Product>(
+    product.variants && product.variants.length > 0 ? product.variants[0] : product
+  );
+
+  const hasVariants = product.variants && product.variants.length > 1;
+
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-50px" }}
-      transition={{ duration: 0.5 }}
-      className="group relative bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden border border-stone-100 flex flex-col"
-    >
-      <div className="bg-stone-200 overflow-hidden relative">
-        <img
-          src={product.imageUrl}
+    <div className="bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden hover:shadow-md transition-shadow duration-300 flex flex-col h-full group">
+      <div className="relative aspect-square overflow-hidden bg-stone-100">
+        <img 
+          src={selectedVariant.imageUrl} 
           alt={product.name}
-          className="w-full h-52 object-cover object-center group-hover:scale-105 transition-transform duration-500"
-          referrerPolicy="no-referrer"
           loading="lazy"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
-        {!product.inStock && (
-          <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center">
-            <span className="px-3 py-1 bg-stone-800 text-white text-xs font-bold uppercase tracking-wider rounded-full">
-              Sin Stock
-            </span>
+        {!selectedVariant.inStock && (
+          <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center">
+            <span className="bg-stone-900 text-white px-4 py-1.5 rounded-full text-sm font-medium">Sin Stock</span>
           </div>
         )}
-        <span className="absolute top-3 left-3 px-2.5 py-1 bg-white/90 backdrop-blur-sm text-emerald-700 text-xs font-semibold rounded-full border border-emerald-100">
-          {product.category}
-        </span>
+        <button 
+          onClick={() => onViewDetails(selectedVariant)}
+          className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-sm rounded-full text-stone-600 hover:text-emerald-600 hover:bg-white transition-colors shadow-sm"
+        >
+          <Info className="w-5 h-5" />
+        </button>
       </div>
-      
-      <div className="p-5 flex flex-col flex-grow">
-        <div className="mb-3">
-          <h3 className="text-base font-bold text-stone-900 leading-tight mb-1">{product.name}</h3>
-          <p className="text-sm text-stone-500 line-clamp-2">{product.description}</p>
-        </div>
 
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          {product.characteristics.slice(0, 2).map((char, i) => (
-            <span key={i} className="text-xs px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full font-medium">
+      <div className="p-5 flex flex-col flex-grow">
+        <div className="mb-1">
+          <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">{product.category}</span>
+        </div>
+        
+        {/* Usamos el nombre base agrupado (ej: Aceite De Coco Gb Neutro) */}
+        <h3 className="font-serif text-lg font-bold text-stone-900 mb-1 leading-tight line-clamp-2">
+          {product.name}
+        </h3>
+        
+        <div className="flex flex-wrap gap-1 mb-3">
+          {product.characteristics?.slice(0, 2).map((char, idx) => (
+            <span key={idx} className="text-[10px] uppercase tracking-wider font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-sm">
               {char}
             </span>
           ))}
         </div>
-        
-        <div className="flex items-center justify-between mt-auto">
-          <p className="text-xl font-bold text-stone-900">{formatPrice(product.price)}</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onViewDetails(product)}
-              className="p-2 border border-stone-200 text-stone-500 rounded-xl hover:bg-stone-50 hover:text-stone-700 transition-colors"
-              aria-label="Ver detalles"
+
+        <div className="mt-auto pt-4 flex flex-col gap-3 border-t border-stone-100">
+          
+          {/* LA LISTA DESPLEGABLE DE TAMAÑOS */}
+          {hasVariants ? (
+            <select 
+              className="w-full text-sm font-medium border border-stone-200 rounded-lg p-2 focus:outline-none focus:border-emerald-500 bg-stone-50 text-stone-700 cursor-pointer"
+              value={selectedVariant.id}
+              onChange={(e) => {
+                const variant = product.variants!.find(v => v.id === e.target.value);
+                if (variant) setSelectedVariant(variant);
+              }}
             >
-              <Info className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onAddToCart(product)}
-              disabled={!product.inStock}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
-                product.inStock 
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
+              {product.variants!.map(v => (
+                <option key={v.id} value={v.id}>
+                  {getSizeLabel(v.name)} - ${v.price.toLocaleString('es-AR')}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="h-[38px]"></div> // Espaciador invisible para que las tarjetas no queden chuecas
+          )}
+
+          <div className="flex items-center justify-between mt-1">
+            <div className="flex flex-col">
+              {hasVariants && <span className="text-[10px] text-stone-400 font-medium">Seleccionado:</span>}
+              <span className="text-xl font-bold text-stone-900">
+                ${selectedVariant.price.toLocaleString('es-AR')}
+              </span>
+            </div>
+            
+            <button 
+              onClick={() => onAddToCart(selectedVariant)}
+              disabled={!selectedVariant.inStock}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-medium transition-all active:scale-95 ${
+                selectedVariant.inStock 
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm' 
                   : 'bg-stone-100 text-stone-400 cursor-not-allowed'
               }`}
             >
-              <ShoppingCart className="w-4 h-4" />
-              Agregar
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Agregar</span>
             </button>
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
+
+// memo evita re-renders cuando el producto no cambió (importante con catálogos grandes)
+export const ProductCard = memo(ProductCardInner);

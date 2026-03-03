@@ -8,7 +8,7 @@ interface AdminPanelProps {
 }
 
 export function AdminPanel({ onBack }: AdminPanelProps) {
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem('lf-admin-token'));
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
@@ -26,6 +26,7 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
       const data = await res.json();
 
       if (data.success) {
+        sessionStorage.setItem('lf-admin-token', data.token);
         setToken(data.token);
         setPasswordError(false);
       } else {
@@ -143,13 +144,21 @@ export function AdminPanel({ onBack }: AdminPanelProps) {
           </button>
           <h1 className="text-3xl font-serif font-bold text-stone-900">Panel de Pedidos</h1>
         </div>
-        <button
-          onClick={() => token && fetchOrders(token)}
-          className="flex items-center gap-2 text-sm text-stone-500 hover:text-emerald-600 transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoadingOrders ? 'animate-spin' : ''}`} />
-          Actualizar
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => token && fetchOrders(token)}
+            className="flex items-center gap-2 text-sm text-stone-500 hover:text-emerald-600 transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoadingOrders ? 'animate-spin' : ''}`} />
+            Actualizar
+          </button>
+          <button
+            onClick={() => { sessionStorage.removeItem('lf-admin-token'); setToken(null); }}
+            className="flex items-center gap-2 text-sm text-stone-500 hover:text-red-500 transition-colors border border-stone-200 rounded-lg px-3 py-1.5 hover:border-red-200"
+          >
+            Cerrar sesión
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">

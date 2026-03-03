@@ -15,7 +15,7 @@ export function OrderSuccess({ onBackToStore, orderNumber }: OrderSuccessProps) 
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-stone-900 mb-2">Error en la orden</h1>
           <p className="text-stone-500 mb-6">
-            No se pudo recuperar el número de tu pedido. Por favor, contactanos por WhatsApp.
+            No se pudo confirmar tu pedido. Tu carrito fue conservado para que puedas intentarlo de nuevo.
           </p>
           <a
             href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hola! Tuve un problema al finalizar mi pedido, ¿me pueden ayudar?')}`}

@@ -6,13 +6,33 @@ const { Pool } = pkg;
 const app = express();
 
 app.use(express.json());
+
+// CORS: en producción solo permite el dominio de Netlify
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
+
+// Rate limiting simple para el endpoint de login (sin dependencias extra)
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const rateLimitLogin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (entry && now < entry.resetAt) {
+    if (entry.count >= 10) {
+      return res.status(429).json({ success: false, error: 'Demasiados intentos. Esperá unos minutos.' });
+    }
+    entry.count++;
+  } else {
+    loginAttempts.set(ip, { count: 1, resetAt: now + 10 * 60 * 1000 }); // ventana de 10 min
+  }
+  next();
+};
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://usuario:contraseña@localhost:5432/dietetica',
@@ -106,7 +126,7 @@ async function getProducts() {
     // --- MAGIA: AGRUPACIÓN POR TAMAÑOS ---
     const groupedMap = new Map();
     // Expresión para encontrar ml, gr, kg, etc.
-    const sizeRegex = /\b(\d+(?:[.,]\d+)?\s*(?:ml|cc|l|g|gr|kg|cm3|oz))\b/i;
+    const sizeRegex = /\b(\d+(?:[.,]\d+)?\s*(?:ml|cc|lt|l|g|gr|kg|cm3|oz))\b/i;
 
     parsedProducts.forEach(p => {
       const sizeMatch = p.name.match(sizeRegex);
@@ -148,10 +168,21 @@ app.get('/api/products', async (req, res) => {
 app.post('/api/orders', async (req, res) => {
   try {
     const { items, customerInfo, deliveryMethod, paymentMethod } = req.body;
+
+    // Validación básica de input
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'El carrito está vacío.' });
+    }
+    if (!customerInfo?.nombre || !customerInfo?.telefono) {
+      return res.status(400).json({ success: false, error: 'Faltan datos del cliente.' });
+    }
+    if (!['delivery', 'pickup'].includes(deliveryMethod)) {
+      return res.status(400).json({ success: false, error: 'Método de entrega inválido.' });
+    }
+
     let subtotal = 0;
     const allProducts = await getProducts();
     for (const item of items) {
-      // Al comprar, buscamos la variante específica elegida
       let realProduct = null;
       for (const group of allProducts) {
         if (group.variants) {
@@ -161,13 +192,19 @@ app.post('/api/orders', async (req, res) => {
           realProduct = group;
         }
       }
-      if(realProduct) subtotal += realProduct.price * item.quantity;
+      if (realProduct) subtotal += realProduct.price * item.quantity;
     }
+
+    // Bug fix: si ningún producto fue encontrado, rechazar la orden
+    if (subtotal === 0) {
+      return res.status(400).json({ success: false, error: 'No se encontraron los productos en el catálogo.' });
+    }
+
     const finalTotal = subtotal + (deliveryMethod === 'delivery' ? 2500 : 0) - (paymentMethod === 'transfer' ? Math.round(subtotal * 0.1) : 0);
     const orderNumber = '#LF-' + Math.floor(Math.random() * 100000).toString().padStart(5, '0');
     await pool.query('INSERT INTO orders (order_number, total, items, customer_info) VALUES ($1, $2, $3, $4)', [orderNumber, finalTotal, JSON.stringify(items), JSON.stringify(customerInfo)]);
     res.json({ success: true, orderNumber });
-  } catch (error) { res.status(500).json({ success: false }); }
+  } catch (error) { res.status(500).json({ success: false, error: 'Error interno del servidor.' }); }
 });
 
 const ADMIN_PASSWORD = 'lafamilia2024';
@@ -175,7 +212,7 @@ const ADMIN_TOKEN = 'lf-token-seguro-789';
 const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (req.headers.authorization?.split(' ')[1] === ADMIN_TOKEN) next(); else res.status(401).json({ error: 'No autorizado' });
 };
-app.post('/api/admin/login', (req, res) => req.body.password === ADMIN_PASSWORD ? res.json({ success: true, token: ADMIN_TOKEN }) : res.status(401).json({ success: false }));
+app.post('/api/admin/login', rateLimitLogin, (req, res) => req.body.password === ADMIN_PASSWORD ? res.json({ success: true, token: ADMIN_TOKEN }) : res.status(401).json({ success: false }));
 app.get('/api/orders', requireAuth, async (req, res) => res.json((await pool.query('SELECT * FROM orders ORDER BY created_at DESC')).rows));
 app.patch('/api/orders/:id/status', requireAuth, async (req, res) => { await pool.query('UPDATE orders SET status = $1 WHERE id = $2', [req.body.status, req.params.id]); res.json({ success: true }); });
 

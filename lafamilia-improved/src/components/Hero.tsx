@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Leaf, Shield, Truck } from 'lucide-react';
+import { Leaf } from 'lucide-react';
 
 export function Hero() {
   return (
