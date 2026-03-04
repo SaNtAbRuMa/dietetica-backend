@@ -58,34 +58,6 @@ export default function App() {
     saveCartToStorage(cartItems);
   }, [cartItems]);
 
-  // Manejar retorno desde MercadoPago — MP agrega ?mp=success&external_reference=... a la URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const mpStatus    = params.get('mp');
-    const mpRef       = params.get('external_reference');  // número de orden LF-XXXXX
-
-    if (mpStatus && mpRef) {
-      // Limpiar la URL (remover los query params de MP)
-      window.history.replaceState({}, '', window.location.pathname + window.location.hash);
-
-      if (mpStatus === 'success') {
-        setLastOrderNumber(mpRef);
-        setCartItems([]);
-        navigateTo('success');
-      } else if (mpStatus === 'failure') {
-        // Pago rechazado → volver al checkout (el carrito se conservó)
-        navigateTo('checkout');
-      } else if (mpStatus === 'pending') {
-        // Pago en revisión → mostrar éxito con mensaje de pendiente
-        setLastOrderNumber(mpRef);
-        setCartItems([]);
-        navigateTo('success');
-      }
-    }
-  // Solo al montar — no depende de cartItems para no re-ejecutar
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '') || 'store';

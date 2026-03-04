@@ -18,7 +18,8 @@ export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCard
   );
 
   const handleCardClick = () => {
-    onViewDetails(selectedVariant);
+    // Pasamos el producto completo (con todas las variantes) al modal
+    onViewDetails(product);
   };
 
   return (

@@ -17,7 +17,7 @@ export function Hero() {
   return (
     <div id="inicio">
       {/* Banner */}
-      <div className="relative min-h-[420px] sm:min-h-[500px] flex items-center bg-[url('https://images.unsplash.com/photo-1505253758473-96b7015fcd40?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center">
+      <div className="relative min-h-[420px] sm:min-h-[500px] flex items-center bg-[url('https://images.unsplash.com/photo-1490818387583-1baba5e638af?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center">
         <div className="absolute inset-0 bg-gradient-to-r from-stone-900/90 via-stone-900/60 to-stone-900/10" />
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 w-full">
           <motion.div
@@ -33,7 +33,7 @@ export function Hero() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-sm font-semibold rounded-full mb-5 backdrop-blur-sm"
             >
               <Leaf className="w-3.5 h-3.5" />
-              Dietética Natural · Tandil
+              Dietética Natural · Olavarría
             </motion.span>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-extrabold text-white leading-tight">
