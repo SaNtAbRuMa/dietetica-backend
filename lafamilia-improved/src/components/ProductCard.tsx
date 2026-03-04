@@ -11,23 +11,23 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCardProps) {
+  // hasVariants = múltiples tamaños para elegir
   const hasVariants = product.variants && product.variants.length > 1;
+  // hasSingleVariant = fue agrupado pero tiene solo 1 tamaño (el nombre base no tiene medida)
+  const hasSingleVariant = product.variants && product.variants.length === 1;
 
+  // SIEMPRE usar la variante real (con nombre completo y precio correcto),
+  // nunca el objeto grupo que tiene nombre sin tamaño
   const [selectedVariant, setSelectedVariant] = useState<Product>(
-    hasVariants ? product.variants![0] : product
+    product.variants ? product.variants[0] : product
   );
-
-  const handleCardClick = () => {
-    // Pasamos el producto completo (con todas las variantes) al modal
-    onViewDetails(product);
-  };
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-stone-100 flex flex-col h-full group hover:shadow-lg transition-all duration-300">
 
-      {/* Imagen: toda el area es un boton que abre el modal */}
+      {/* Imagen */}
       <button
-        onClick={handleCardClick}
+        onClick={() => onViewDetails(product)}
         className="relative w-full aspect-square overflow-hidden rounded-t-2xl bg-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
         aria-label={`Ver detalle de ${product.name}`}
       >
@@ -37,7 +37,6 @@ export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCard
           loading="lazy"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
-
         {!selectedVariant.inStock && (
           <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex items-center justify-center">
             <span className="bg-stone-900 text-white px-4 py-1.5 rounded-full text-sm font-semibold">
@@ -45,8 +44,6 @@ export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCard
             </span>
           </div>
         )}
-
-        {/* Overlay hover que indica que se puede ver el detalle */}
         <div className="absolute inset-0 bg-stone-900/0 group-hover:bg-stone-900/20 transition-colors duration-300 flex items-center justify-center">
           <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/95 text-stone-800 text-xs font-bold px-3 py-1.5 rounded-full shadow-md">
             Ver detalle
@@ -60,9 +57,9 @@ export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCard
           {product.category}
         </span>
 
-        {/* Nombre clickeable */}
+        {/* Nombre */}
         <button
-          onClick={handleCardClick}
+          onClick={() => onViewDetails(product)}
           className="text-left font-serif text-base font-bold text-stone-900 leading-snug line-clamp-2 hover:text-emerald-700 transition-colors mb-2"
         >
           {product.name}
@@ -71,30 +68,37 @@ export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCard
         {product.characteristics && product.characteristics.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {product.characteristics.slice(0, 2).map((char, idx) => (
-              <span
-                key={idx}
-                className="text-[10px] uppercase tracking-wide font-semibold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-sm"
-              >
+              <span key={idx} className="text-[10px] uppercase tracking-wide font-semibold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-sm">
                 {char}
               </span>
             ))}
           </div>
         )}
 
-        {/* Selector de variantes — máximo 3 chips, el resto en el modal */}
+        {/* Producto con UN solo tamaño: mostrar badge con la medida */}
+        {hasSingleVariant && (
+          <div className="mb-3">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-stone-100 text-stone-600 border border-stone-200">
+              {getSizeLabel(product.variants![0].name)}
+            </span>
+          </div>
+        )}
+
+        {/* Producto con MÚLTIPLES tamaños: chips scrolleables */}
         {hasVariants && (
           <div className="mb-3">
             <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide mb-1.5">
-              Tamaño / Presentación
+              Tamaño
             </p>
-            <div className="flex flex-wrap gap-1.5 items-center">
-              {product.variants!.slice(0, 3).map(v => {
+            {/* Scroll horizontal para que no rompa el layout con muchas variantes */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+              {product.variants!.slice(0, 4).map(v => {
                 const isSelected = v.id === selectedVariant.id;
                 return (
                   <button
                     key={v.id}
                     onClick={() => setSelectedVariant(v)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                    className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
                       isSelected
                         ? 'bg-stone-900 text-white border-stone-900 shadow-sm'
                         : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400 hover:bg-stone-50'
@@ -104,12 +108,12 @@ export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCard
                   </button>
                 );
               })}
-              {product.variants!.length > 3 && (
+              {product.variants!.length > 4 && (
                 <button
                   onClick={() => onViewDetails(product)}
-                  className="px-2.5 py-1 rounded-lg text-xs font-semibold border border-dashed border-stone-300 text-stone-400 hover:border-emerald-400 hover:text-emerald-600 transition-all"
+                  className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border border-dashed border-emerald-300 text-emerald-600 hover:bg-emerald-50 transition-all"
                 >
-                  +{product.variants!.length - 3} más
+                  +{product.variants!.length - 4} más
                 </button>
               )}
             </div>
@@ -121,7 +125,6 @@ export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCard
           <span className="text-xl font-bold text-stone-900">
             {formatPrice(selectedVariant.price)}
           </span>
-
           <button
             onClick={() => onAddToCart(selectedVariant)}
             disabled={!selectedVariant.inStock}

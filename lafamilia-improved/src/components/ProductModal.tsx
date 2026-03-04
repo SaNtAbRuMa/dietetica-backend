@@ -14,14 +14,16 @@ interface ProductModalProps {
 
 export function ProductModal({ product, isOpen, onClose, onAddToCart }: ProductModalProps) {
   const hasVariants = product.variants && product.variants.length > 1;
+  const hasSingleVariant = product.variants && product.variants.length === 1;
 
-  const [selectedVariant, setSelectedVariant] = useState<Product>(
-    hasVariants ? product.variants![0] : product
-  );
+  // SIEMPRE usar la variante real: nunca el objeto grupo (que tiene nombre sin tamaño)
+  const getInitialVariant = () => product.variants ? product.variants[0] : product;
+
+  const [selectedVariant, setSelectedVariant] = useState<Product>(getInitialVariant);
   const [justAdded, setJustAdded] = useState(false);
 
   useEffect(() => {
-    setSelectedVariant(hasVariants ? product.variants![0] : product);
+    setSelectedVariant(getInitialVariant());
     setJustAdded(false);
   }, [product.id]);
 
@@ -35,7 +37,8 @@ export function ProductModal({ product, isOpen, onClose, onAddToCart }: ProductM
     };
   }, [isOpen, onClose]);
 
-  const displayProduct = hasVariants ? selectedVariant : product;
+  // displayProduct: siempre la variante seleccionada (tiene nombre completo con tamaño)
+  const displayProduct = selectedVariant;
 
   const handleAddToCart = () => {
     onAddToCart(displayProduct);
@@ -104,9 +107,16 @@ export function ProductModal({ product, isOpen, onClose, onAddToCart }: ProductM
                 <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-widest mb-1">
                   {product.category}
                 </p>
-                <h2 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 leading-snug mb-3">
+                {/* Nombre base del producto (sin tamaño) */}
+                <h2 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 leading-snug mb-1">
                   {product.name}
                 </h2>
+                {/* Si es producto con variante única, mostrar el tamaño */}
+                {hasSingleVariant && (
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-stone-100 text-stone-600 border border-stone-200 mb-3">
+                    {getSizeLabel(product.variants![0].name)}
+                  </span>
+                )}
 
                 {/* Precio con animación al cambiar variante */}
                 <motion.p
@@ -120,7 +130,7 @@ export function ProductModal({ product, isOpen, onClose, onAddToCart }: ProductM
                 </motion.p>
               </div>
 
-              {/* Selector de tamaños */}
+              {/* Selector de tamaños — solo si hay más de 1 variante */}
               {hasVariants && (
                 <div className="mb-5">
                   <div className="flex items-center gap-2 mb-2.5">
