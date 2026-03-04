@@ -81,14 +81,14 @@ export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCard
           </div>
         )}
 
-        {/* Selector de variantes como chips — reemplaza el <select> nativo */}
+        {/* Selector de variantes — máximo 3 chips, el resto en el modal */}
         {hasVariants && (
           <div className="mb-3">
             <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide mb-1.5">
               Tamaño / Presentación
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {product.variants!.map(v => {
+            <div className="flex flex-wrap gap-1.5 items-center">
+              {product.variants!.slice(0, 3).map(v => {
                 const isSelected = v.id === selectedVariant.id;
                 return (
                   <button
@@ -104,6 +104,14 @@ export function ProductCard({ product, onAddToCart, onViewDetails }: ProductCard
                   </button>
                 );
               })}
+              {product.variants!.length > 3 && (
+                <button
+                  onClick={() => onViewDetails(product)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold border border-dashed border-stone-300 text-stone-400 hover:border-emerald-400 hover:text-emerald-600 transition-all"
+                >
+                  +{product.variants!.length - 3} más
+                </button>
+              )}
             </div>
           </div>
         )}

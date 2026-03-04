@@ -107,8 +107,7 @@ export default function App() {
   const categories = useMemo(
     () => Array.from(new Set(products.map(p => p.category)))
       .filter(Boolean)
-      .sort()
-      .map(cat => cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()),
+      .sort(),
     [products]
   );
 
