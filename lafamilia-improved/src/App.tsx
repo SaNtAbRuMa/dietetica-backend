@@ -80,11 +80,12 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
-  // Carga de productos con estado de error y botón de reintento
+  // Carga de productos desde Google Sheets vía Netlify Function (/api/products)
+  // Los pedidos y el admin siguen usando API_BASE (Render backend)
   const fetchProducts = useCallback(() => {
     setIsLoading(true);
     setLoadError(false);
-    fetch(`${API_BASE}/api/products`)
+    fetch('/api/products')
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();

@@ -2,7 +2,16 @@
   command   = "npm run build"
   publish   = "dist"
 
-# Redirigir todas las rutas al index.html (necesario para SPA con hash routing)
+# ── Catálogo desde Google Sheets ────────────────────────────────────────────
+# Este redirect intercepta /api/products ANTES del catch-all de la SPA
+# y lo redirige a la función serverless que lee Google Sheets.
+# IMPORTANTE: debe estar ANTES del redirect /* para tener prioridad.
+[[redirects]]
+  from   = "/api/products"
+  to     = "/.netlify/functions/products"
+  status = 200
+
+# ── SPA: redirigir todas las demás rutas al index.html ──────────────────────
 [[redirects]]
   from   = "/*"
   to     = "/index.html"
